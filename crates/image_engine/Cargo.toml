@@ -1,0 +1,9 @@
+[package]
+name = "fileflow_engine"
+version = "0.1.0"
+edition = "2021"
+description = "Core image processing engine for Zcloud FileFlow"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp"] }
+serde = { version = "1.0", features = ["derive"] }

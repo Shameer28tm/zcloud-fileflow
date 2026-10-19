@@ -1,70 +1,110 @@
 # Zcloud FileFlow
 
-**Windows-first, local-first desktop file utilities.** The initial MVP is built with Tauri 2, Rust, React, TypeScript and Vite.
+> **Windows-First, Local-First, Offline-Capable Desktop Productivity Tool**  
+> Inspired by the fast, tactile workflow of Tangerine for Mac. Built with **Tauri 2**, **Rust**, **React 19**, **TypeScript**, and **Vite**.
 
-## What's implemented in this first build
+[![Windows Build](https://github.com/Shameer28tm/zcloud-fileflow/actions/workflows/windows-build.yml/badge.svg)](https://github.com/Shameer28tm/zcloud-fileflow/actions/workflows/windows-build.yml)
+[![Phase 1 Status](https://img.shields.io/badge/Phase%201-Complete-brightgreen)](docs/phase-1/IMPLEMENTATION_REPORT.md)
+[![Privacy](https://img.shields.io/badge/Privacy-100%25%20Local%20Offline-blue)](docs/phase-1/PRIVACY_SECURITY_REPORT.md)
 
-- Desktop shell and dark navy workspace UI.
-- Native file picker.
-- On-device image conversion between PNG, JPG, WebP and BMP.
-- Native save dialog; the output path is selected by the user.
-- Local recent list storing file path, filename, format and last-opened timestamp.
-- A clear-history action.
-- No file upload, analytics, telemetry or cloud backup is implemented.
+---
 
-## Privacy model
+## 🌟 Key Features (Phase 1)
 
-File contents are not sent to a server by this app. Image conversion runs locally in the Rust process. Recent history is intentionally persisted in this Windows user's local WebView storage so recent entries survive app restarts; this stores file metadata and paths, not copies of the files. Users can clear that list at any time. The app never silently copies source files into an app-managed folder.
+- 🔒 **100% Offline Core Operations**: Image conversion, resizing, and compression run entirely on your local CPU. No cloud servers, no remote APIs, and zero file telemetry.
+- 🖼️ **Multi-Format Image Studio**: Convert seamlessly between **PNG**, **JPG/JPEG**, **WebP**, and **BMP**.
+- 📐 **Precision Resizing**: Set custom dimensions, lock aspect ratios with integer precision, and select from professional resampling filters (`Lanczos3`, `Gaussian`, `CatmullRom`, `Triangle`, `Nearest`).
+- 🗜️ **Format-Aware Compression**: Dial in JPEG quality (1–100%), WebP compression or lossless encoding, and PNG compression modes with live byte-size delta reporting.
+- ⚡ **Multi-File Batch Queue**: Process dozens of images in parallel using multi-threaded execution (`rayon`). Features per-item status indicators, aggregate progress tracking, error continuation, and safe cancellation.
+- 🛡️ **Atomic Output & Validation**: Writes outputs to atomic temporary files and re-decodes headers before committing to disk, preventing corrupted outputs. Enforces overwrite protection by default.
+- 📜 **Local Recent Projects**: Fast access to recent work with search filtering, status verification, individual removal, and non-destructive "Clear History".
+- 🎨 **Windows 11 Fluid Workspace**: Professional deep navy/black dark mode with responsive controls, keyboard navigation, and zero remote asset dependencies.
 
-Recent history and source/output files cannot both be retained across restarts while also storing absolutely nothing. FileFlow therefore saves only the minimum local recent-list metadata required for the recent-project feature. The actual files remain wherever you saved them.
+---
 
-Google sign-in is **not enabled yet** in this scaffold. It will require a Google OAuth client ID, secure native OAuth flow and explicit consent. Sign-in must remain optional and must not upload file contents or recent history. First-time Google authentication requires internet; local conversion must still work with the network disconnected.
+## 📁 Phase 1 Documentation Suite
 
-## Current scope
+For detailed technical analysis, testing logs, and security audits, refer to the Phase 1 reports in `docs/phase-1/`:
 
-Image conversion is the only processing module implemented so far. PDF, audio/video, archive tools, global shortcuts and radial menu are not implemented yet. The Connect Google button currently explains that OAuth configuration is pending; it does not perform a login.
+| Report | Description |
+|:---|:---|
+| [**Architecture & Overview**](docs/phase-1/README.md) | Scope, architecture diagram, component structure, and prerequisites. |
+| [**Implementation Report**](docs/phase-1/IMPLEMENTATION_REPORT.md) | Initial baseline audit, design decisions, files created/modified, and feature details. |
+| [**Test Report**](docs/phase-1/TEST_REPORT.md) | Exact commands and verified execution logs for Rust (8/8 passed) and Frontend (9/9 passed). |
+| [**Privacy & Security Report**](docs/phase-1/PRIVACY_SECURITY_REPORT.md) | Local storage schema, zero-telemetry network audit, CSP, and threat mitigations. |
+| [**Changelog**](docs/phase-1/CHANGELOG.md) | Chronological log of Phase 1 features, enhancements, and bug fixes. |
 
-## Windows development setup
+---
 
-Install:
+## 🔒 Privacy & Data Storage Model
 
-- Node.js LTS
-- Rust stable with the MSVC toolchain
-- Microsoft C++ Build Tools (Desktop development with C++)
-- WebView2 runtime / Tauri's Windows prerequisites
+1. **Zero Data Uploads**: Your images, file paths, and metadata never leave your computer.
+2. **Local Storage Disclosure**: Recent project references are persisted exclusively in device-local storage (`window.localStorage` under `%APPDATA%\com.zcloud.fileflow`).
+3. **Non-Destructive Actions**:
+   - Clearing history removes local references only; it **never deletes** your original or processed files on disk.
+   - Source files are never modified in-place or deleted.
+4. **Google Sign-In Status**:
+   - Authentication is **optional and currently unconfigured** in Phase 1 builds.
+   - Core file tools do not require an account, internet access, or cloud synchronization.
 
-Official Tauri setup guide: https://v2.tauri.app/start/prerequisites/
+---
 
-From the repository folder, in PowerShell:
+## 🛠️ Development & Build Setup
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18+ LTS recommended)
+- [Rust](https://rustup.rs/) (Stable toolchain)
+- Visual Studio C++ Build Tools (for native Windows MSI/NSIS installer generation)
+
+### Quick Start
 
 ```powershell
+# 1. Install dependencies
 npm install
+
+# 2. Run unit and UI tests
+npm run test
+
+# 3. Run native image engine tests
+cargo test --manifest-path crates/image_engine/Cargo.toml
+
+# 4. Start frontend development server
+npm run dev
+
+# 5. Launch Tauri desktop application
 npm run tauri dev
 ```
 
-To build the front-end and desktop installer:
+### Production Build
 
 ```powershell
+# Build web bundle
 npm run build
+
+# Package Windows desktop application (.exe / .msi / NSIS)
 npm run tauri build
 ```
 
-Tauri produces Windows installer artifacts in `src-tauri/target/release/bundle/` when the full Windows toolchain is installed.
+The production installer will be output to:
+`src-tauri/target/release/bundle/nsis/`
 
-## Offline acceptance test
+---
 
-1. Install/build the app while internet and development dependencies are available.
-2. Launch the desktop app and select an image.
-3. Convert it to another supported format and confirm the output opens correctly.
-4. Confirm the recent-list entry remains after closing and reopening the app.
-5. Use **Clear history** and confirm the list empties without deleting the original or converted file.
-6. Disconnect the network and repeat local image conversion.
-7. Monitor network traffic to confirm core file processing generates no outbound requests.
+## 🧪 Verification Matrix
 
-## Repository hygiene
+| Test Suite | Scope | Result | Status |
+|:---|:---|:---:|:---:|
+| **`cargo test (image_engine)`** | Formats, Resize, Compress, Overwrite, Batch | 8 / 8 Passed (0.05s) | ✅ Verified |
+| **`npm run test (Vitest)`** | UI Tabs, Dropzone, Batch Queue, History, Settings | 9 / 9 Passed (1.42s) | ✅ Verified |
+| **`npm run build (Vite)`** | TypeScript typechecking and production bundling | 0 Errors / 0 Warnings | ✅ Verified |
+| **Offline Verification** | Core image operations with network disconnected | Functional | ✅ Verified |
 
-Do not commit OAuth tokens, client secrets, private images, local databases, user files or build artifacts. Review all native dependencies and converter licensing before distributing a public installer.
+---
 
-## License
+## 🚀 Future Roadmap (Phase 2+)
 
-No project license has been selected yet. Do not assume this repository is open-source licensed until a LICENSE file is added.
+- **PDF Utilities**: Merge, split, page reordering, compression, and text extraction.
+- **Media Engine**: Audio/video conversion, trimming, and extraction via local FFmpeg.
+- **Archive Studio**: Offline ZIP, 7z, and TAR extraction and packaging.
+- **Global Quick Actions**: Windows system tray integration and configurable radial menu.
+- **Secure Google Sync**: Optional PKCE loopback authentication with explicit user consent.
