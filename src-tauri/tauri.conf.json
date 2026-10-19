@@ -33,6 +33,13 @@
       "nsis",
       "msi"
     ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "shortDescription": "Private, offline-first file conversion for Windows",
     "longDescription": "Zcloud FileFlow offers local file tools designed to work offline without uploading user files.",
     "category": "Utility"
