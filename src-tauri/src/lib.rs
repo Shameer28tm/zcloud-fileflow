@@ -1,6 +1,5 @@
 use image::ImageFormat;
 use std::path::Path;
-use tauri::Manager;
 
 #[tauri::command]
 fn convert_image(

@@ -1,47 +1,70 @@
 # Zcloud FileFlow
 
-A Windows-first, local-first desktop productivity app for file conversion and quick file actions.
+**Windows-first, local-first desktop file utilities.** The initial MVP is built with Tauri 2, Rust, React, TypeScript and Vite.
 
-## Product principles
+## What's implemented in this first build
 
-- **Offline-first:** core file operations must work without an internet connection after installation.
-- **User-controlled files:** processed files are saved only to a destination chosen by the user. Never upload file contents.
-- **No telemetry:** no analytics, tracking pixels, crash upload, usage reporting, or automatic cloud backup.
-- **Google sign-in is optional and online-only:** authentication cannot be required to use local tools. Signing in does not upload files or project history.
-- **Project history:** recent/old project list is local to the current Windows user and stores only the metadata needed to reopen user-selected workspace files. Make clear that this local index is stored; users can clear it at any time. Never silently copy project contents into app storage.
-- **Transparent networking:** no outbound requests except user-initiated Google OAuth and explicitly consented update checks. All network features are disabled when offline.
+- Desktop shell and dark navy workspace UI.
+- Native file picker.
+- On-device image conversion between PNG, JPG, WebP and BMP.
+- Native save dialog; the output path is selected by the user.
+- Local recent list storing file path, filename, format and last-opened timestamp.
+- A clear-history action.
+- No file upload, analytics, telemetry or cloud backup is implemented.
 
-## Initial technology direction
+## Privacy model
 
-- Tauri 2 + Rust for the Windows desktop shell and native integration
-- React + TypeScript + Vite + Tailwind CSS for the UI
-- Local file processing libraries selected per format and reviewed for license compatibility
-- SQLite or a small local index for recent projects, with a clear-history control
+File contents are not sent to a server by this app. Image conversion runs locally in the Rust process. Recent history is intentionally persisted in this Windows user's local WebView storage so recent entries survive app restarts; this stores file metadata and paths, not copies of the files. Users can clear that list at any time. The app never silently copies source files into an app-managed folder.
 
-## MVP milestones
+Recent history and source/output files cannot both be retained across restarts while also storing absolutely nothing. FileFlow therefore saves only the minimum local recent-list metadata required for the recent-project feature. The actual files remain wherever you saved them.
 
-1. Scaffold Tauri + React + TypeScript; provide the dark/navy UI shell and local workspace selection.
-2. Add file-type detection, drag-and-drop, image conversion, output validation, and progress/error states.
-3. Add a local recent-project list with reopen/remove/clear actions.
-4. Add optional Google sign-in via the system browser and secure OAuth flow; no sign-in gate for core local functionality.
-5. Add global shortcut/radial action menu and expand supported format modules.
-6. Build and test a Windows installer, including offline acceptance tests.
+Google sign-in is **not enabled yet** in this scaffold. It will require a Google OAuth client ID, secure native OAuth flow and explicit consent. Sign-in must remain optional and must not upload file contents or recent history. First-time Google authentication requires internet; local conversion must still work with the network disconnected.
 
-## Privacy and security acceptance criteria
+## Current scope
 
-- Airplane-mode test: local workspace, recent-projects list, and installed file tools remain usable offline.
-- No file content or filename is transmitted by default.
-- No hidden telemetry or cloud sync.
-- OAuth tokens, if needed, are kept in OS-protected storage and never committed.
-- Do not request Google Drive scopes unless Drive integration is deliberately added in a separate, explicit feature.
-- Show clear copy explaining that Google sign-in needs internet and cannot authenticate for the first time offline.
-- Users can sign out, clear local history, and choose where project files are saved.
-- Never claim 'nothing is stored': explain that local files remain wherever users save them and the recent list stores local metadata until cleared.
+Image conversion is the only processing module implemented so far. PDF, audio/video, archive tools, global shortcuts and radial menu are not implemented yet. The Connect Google button currently explains that OAuth configuration is pending; it does not perform a login.
 
-## Development
+## Windows development setup
 
-Toolchain and build instructions will be added with the first application scaffold. Keep secrets, tokens, local environment files, build artifacts, user files, and local databases out of Git.
+Install:
 
-## Licensing
+- Node.js LTS
+- Rust stable with the MSVC toolchain
+- Microsoft C++ Build Tools (Desktop development with C++)
+- WebView2 runtime / Tauri's Windows prerequisites
 
-Audit each bundled converter/library and its redistribution terms before shipping a public installer.
+Official Tauri setup guide: https://v2.tauri.app/start/prerequisites/
+
+From the repository folder, in PowerShell:
+
+```powershell
+npm install
+npm run tauri dev
+```
+
+To build the front-end and desktop installer:
+
+```powershell
+npm run build
+npm run tauri build
+```
+
+Tauri produces Windows installer artifacts in `src-tauri/target/release/bundle/` when the full Windows toolchain is installed.
+
+## Offline acceptance test
+
+1. Install/build the app while internet and development dependencies are available.
+2. Launch the desktop app and select an image.
+3. Convert it to another supported format and confirm the output opens correctly.
+4. Confirm the recent-list entry remains after closing and reopening the app.
+5. Use **Clear history** and confirm the list empties without deleting the original or converted file.
+6. Disconnect the network and repeat local image conversion.
+7. Monitor network traffic to confirm core file processing generates no outbound requests.
+
+## Repository hygiene
+
+Do not commit OAuth tokens, client secrets, private images, local databases, user files or build artifacts. Review all native dependencies and converter licensing before distributing a public installer.
+
+## License
+
+No project license has been selected yet. Do not assume this repository is open-source licensed until a LICENSE file is added.
