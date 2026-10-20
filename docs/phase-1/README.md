@@ -39,8 +39,8 @@ graph TD
 - **Serialization**: `serde` (v1.0) with derive macros
 - **Frontend UI**: React 19, TypeScript ~5.6, Vite 6, `lucide-react`
 - **Testing**:
-  - Rust: Native Rust unit test runner in `crates/image_engine` (8 tests)
-  - Frontend: `vitest` with `jsdom` and `@testing-library/react` (9 tests)
+  - Rust: Native Rust unit test runner in `crates/image_engine` (12 tests)
+  - Frontend: `vitest` with `jsdom` and `@testing-library/react` (11 tests)
 
 ---
 
@@ -56,7 +56,7 @@ In PowerShell:
 
 ```powershell
 # 1. Install dependencies
-npm install
+npm ci
 
 # 2. Run automated test suites
 npm run test                                           # Frontend tests (Vitest)

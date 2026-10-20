@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Atomic temporary file generation (`<target>.tmp.<timestamp>`) and rename to protect against partial outputs.
   - Post-write file decode verification to guarantee valid output files.
   - Overwrite safety checks with configurable `allow_overwrite` flag.
-  - Parallel multi-file batch execution powered by `rayon`.
+  - Multi-file batch execution queue with cooperative per-file cancellation, aggregate progress, and error continuation.
   - Image metadata inspector extracting dimensions, format, and byte size.
 - **Tauri IPC Command Integration (`src-tauri/src/lib.rs`)**:
   - Exported commands: `process_image`, `convert_image`, `batch_process_images`, `get_image_metadata`, and `check_file_exists`.

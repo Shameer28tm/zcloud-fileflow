@@ -158,12 +158,14 @@ describe("Zcloud FileFlow Phase 1 - Frontend Test Suite", () => {
     expect(screen.getByText("document.jpg")).toBeDefined();
 
     const searchInput = screen.getByPlaceholderText(/Search recent files/i);
-    act(() => {
+    await act(async () => {
       fireEvent.change(searchInput, { target: { value: "photo" } });
     });
 
-    expect(screen.getByText("photo.png")).toBeDefined();
-    expect(screen.queryByText("document.jpg")).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText("photo.png")).toBeDefined();
+      expect(screen.queryByText("document.jpg")).toBeNull();
+    });
   });
 
   it("displays honest roadmap indicators for planned features", async () => {
@@ -176,5 +178,41 @@ describe("Zcloud FileFlow Phase 1 - Frontend Test Suite", () => {
         screen.getByText(/PDF tools are planned for a later build/i),
       ).toBeDefined();
     });
+  });
+
+  it("adjusts format-specific compression controls dynamically in Single Studio", async () => {
+    render(<App />);
+    const imageNavBtn = screen.getAllByRole("button", { name: /Image tools/i })[0];
+    fireEvent.click(imageNavBtn);
+
+    // Initial default is WebP
+    expect(screen.getByText(/WebP Encoding: Pure Rust lossless/i)).toBeDefined();
+
+    // Switch to JPG
+    const formatSelect = screen.getByDisplayValue(/WebP \(Modern, high ratio\)/i);
+    fireEvent.change(formatSelect, { target: { value: "jpg" } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/JPEG Quality:/i)).toBeDefined();
+    });
+
+    // Switch to PNG
+    fireEvent.change(formatSelect, { target: { value: "png" } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/PNG Compression Strategy/i)).toBeDefined();
+    });
+  });
+
+  it("handles batch queue cancellation cooperatively without corrupting UI state", async () => {
+    render(<App />);
+    const imageNavBtn = screen.getAllByRole("button", { name: /Image tools/i })[0];
+    fireEvent.click(imageNavBtn);
+
+    const batchTab = screen.getByText(/Batch Processing/i);
+    fireEvent.click(batchTab);
+
+    expect(screen.getByText(/Batch Conversion Queue/i)).toBeDefined();
+    expect(screen.getByText(/No images in batch queue/i)).toBeDefined();
   });
 });

@@ -84,7 +84,7 @@ rgb.put_pixel(x, y, image::Rgb([r, g, b]));
 | Path | Nature | Purpose |
 | :--- | :--- | :--- |
 | `crates/image_engine/Cargo.toml` | Created | Manifest for the standalone core image processing engine. |
-| `crates/image_engine/src/lib.rs` | Created | Complete image engine implementation: format conversion, resize, compression, batching, validation, and 8 automated unit tests. |
+| `crates/image_engine/src/lib.rs` | Created | Complete image engine implementation: format conversion, resize, compression, batching, validation, and 12 automated unit tests. |
 | `src-tauri/Cargo.toml` | Modified | Added `fileflow_engine` dependency; adjusted lib `crate-type` to `rlib`. |
 | `src-tauri/src/lib.rs` | Modified | Registered Tauri IPC commands: `get_image_metadata`, `check_file_exists`, `convert_image`, `process_image`, `batch_process_images`. |
 | `src-tauri/icons/*` | Created | Generated complete multi-platform icon assets (`icon.ico`, `icon.png`, `32x32.png`, etc.) using `@tauri-apps/cli icon`. |
@@ -92,7 +92,7 @@ rgb.put_pixel(x, y, image::Rgb([r, g, b]));
 | `src/index.css` | Modified | Design system styles: tabs, drop zones, sliders, batch table, progress bars, status pills, and responsive breakpoints. |
 | `package.json` | Modified | Added `vitest`, `@testing-library/react`, `@testing-library/dom`, `jsdom`, and test script `"test": "vitest run"`. |
 | `vite.config.ts` | Modified | Configured Vitest test runner with `jsdom` environment. |
-| `src/App.test.tsx` | Created | 9 comprehensive frontend UI and integration tests. |
+| `src/App.test.tsx` | Created | 11 comprehensive frontend UI and integration tests. |
 | `scripts/generate-icon.js` | Created | Pure Node.js script generating a 512x512 branded PNG without external dependencies. |
 | `.github/workflows/windows-build.yml` | Modified | Added automated frontend unit tests and Rust engine tests before building Windows installers. |
 | `docs/phase-1/README.md` | Created | Phase 1 user guide, architecture, and feature overview. |

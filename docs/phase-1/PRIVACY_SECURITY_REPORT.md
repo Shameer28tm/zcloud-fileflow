@@ -70,22 +70,22 @@ This assessment verifies that:
 
 ### Storage Location
 - **Frontend Storage Mechanism**: Web standard `window.localStorage` within the sandboxed Tauri WebView data directory.
-- **Storage Key**: `zcloud_recent_projects_v1`
-- **Location on Windows**: `%APPDATA%\com.zcloud.fileflow\EBWebView\Default\Local Storage\`
+- **Storage Key**: `zcloud-fileflow.recent.v1`
+- **Location on Windows**: `%LOCALAPPDATA%\com.zclouddigitech.fileflow\EBWebView\Default\Local Storage\`
 
 ### Schema Specification
 Each history entry strictly persists only the following non-sensitive metadata:
 
 ```typescript
-interface RecentProject {
-  id: string;          // Cryptographically pseudo-random or UUIDv4 identifier
-  name: string;        // Base filename (e.g., "banner-draft.png")
+interface RecentItem {
   path: string;        // Full local absolute file path
+  name: string;        // Base filename (e.g., "banner-draft.png")
   kind: string;        // MIME or extension classification ("PNG", "JPEG", "WebP", "BMP")
-  lastOpened: string;  // ISO 8601 UTC timestamp string
-  dimensions?: string; // Informational display string (e.g., "1920x1080")
+  lastOpened: number;  // Unix timestamp (ms)
+  width?: number;      // Image width in pixels
+  height?: number;     // Image height in pixels
   sizeBytes?: number;  // File size in bytes for UI delta display
-  status?: string;     // Local existence status ('available' | 'missing' | 'deleted')
+  exists?: boolean;    // Local disk existence flag
 }
 ```
 
@@ -106,8 +106,8 @@ An audit was conducted across the source tree for outbound network calls (`fetch
 
 | Subsystem | Audit Finding | Network State |
 |:---|:---|:---|
-| **Image Engine (`crates/image_engine`)** | Only uses `image`, `rayon`, `serde`, `thiserror`. Zero network dependencies. | **100% Offline** |
-| **Tauri Core (`src-tauri`)** | Standard Tauri 2 plugins (`dialog`, `opener`). No telemetry plugins included. | **100% Offline** |
+| **Image Engine (`crates/image_engine`)** | Only uses `image` and `serde`. Zero network dependencies. | **100% Offline** |
+| **Tauri Core (`src-tauri`)** | Standard Tauri 2 plugins (`dialog`). No telemetry plugins included. | **100% Offline** |
 | **Frontend UI (`src/App.tsx`)** | All icons loaded from `lucide-react` (local bundle). No Google Fonts CDN or remote scripts. | **100% Offline** |
 | **Styling (`src/index.css`)** | System font stacks (`system-ui`, `-apple-system`, `Segoe UI`, `Roboto`, `sans-serif`). Zero `@import url(...)` to external CDNs. | **100% Offline** |
 | **Analytics / Telemetry** | None present. No Sentry, PostHog, Google Analytics, or crash uploaders. | **100% Offline** |
@@ -178,9 +178,7 @@ All dependencies in Phase 1 use permissive commercial-friendly open-source licen
 | Dependency | Ecosystem | License | Risk Analysis |
 |:---|:---|:---|:---|
 | `image` (0.25) | Rust | MIT / Apache-2.0 | Standard Rust ecosystem image parsing library; memory-safe. |
-| `rayon` (1.10) | Rust | MIT / Apache-2.0 | Memory-safe data parallelism library for multi-core batch processing. |
 | `serde` / `serde_json` | Rust | MIT / Apache-2.0 | Industry standard serialization. |
-| `thiserror` (2.0) | Rust | MIT / Apache-2.0 | Clean error propagation. |
 | `react` / `react-dom` (19) | NPM | MIT | Production frontend framework. |
 | `lucide-react` | NPM | ISC | Permissive icon library. |
 | `vite` (6) | NPM | MIT | Build tool and bundler. |

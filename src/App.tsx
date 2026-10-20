@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import {
@@ -147,7 +147,7 @@ function App() {
   const [resampleFilter, setResampleFilter] = useState("lanczos3");
 
   const [quality, setQuality] = useState(85);
-  const [webpLossless, setWebpLossless] = useState(false);
+  const webpLossless = true;
   const [pngCompression, setPngCompression] = useState("default");
 
   // Batch Mode State
@@ -155,6 +155,7 @@ function App() {
   const [batchOutputDir, setBatchOutputDir] = useState("");
   const [batchProgress, setBatchProgress] = useState<{ total: number; done: number; success: number; failed: number } | null>(null);
   const [batchCancelled, setBatchCancelled] = useState(false);
+  const cancelBatchRef = useRef(false);
 
   // Recent History Search
   const [historySearch, setHistorySearch] = useState("");
@@ -411,6 +412,7 @@ function App() {
     }
 
     setBusy(true);
+    cancelBatchRef.current = false;
     setBatchCancelled(false);
     setBatchProgress({ total: batchQueue.length, done: 0, success: 0, failed: 0 });
 
@@ -418,7 +420,16 @@ function App() {
     let failCount = 0;
 
     for (let i = 0; i < batchQueue.length; i++) {
-      if (batchCancelled) break;
+      if (cancelBatchRef.current) {
+        setBatchQueue((prev) =>
+          prev.map((q, idx) =>
+            idx >= i && (q.status === "pending" || q.status === "processing")
+              ? { ...q, status: "skipped", errorMessage: "Batch stopped by user" }
+              : q,
+          ),
+        );
+        break;
+      }
 
       const item = batchQueue[i];
       setBatchQueue((prev) =>
@@ -478,7 +489,13 @@ function App() {
     }
 
     setBusy(false);
-    setToast(`Batch complete: ${successCount} successful, ${failCount} failed.`);
+    if (cancelBatchRef.current) {
+      setToast(
+        `Batch stopped: ${successCount} completed, ${failCount} failed, ${batchQueue.length - (successCount + failCount)} skipped.`,
+      );
+    } else {
+      setToast(`Batch complete: ${successCount} successful, ${failCount} failed.`);
+    }
   }
 
   function openRecent(item: RecentItem) {
@@ -1051,10 +1068,10 @@ function App() {
                         </select>
                       </div>
 
-                      {(format === "jpg" || format === "webp") && !webpLossless && (
+                      {format === "jpg" && (
                         <div className="form-field">
                           <label>
-                            Quality: <span>{quality}%</span>
+                            JPEG Quality: <span>{quality}%</span>
                           </label>
                           <input
                             type="range"
@@ -1071,14 +1088,9 @@ function App() {
 
                       {format === "webp" && (
                         <div className="form-field" style={{ justifyContent: "center" }}>
-                          <label className="toggle-group">
-                            <input
-                              type="checkbox"
-                              checked={webpLossless}
-                              onChange={(e) => setWebpLossless(e.target.checked)}
-                            />
-                            <span>Enable Lossless WebP Compression</span>
-                          </label>
+                          <span className="field-hint" style={{ color: "#8aa0bd" }}>
+                            WebP Encoding: Pure Rust lossless VP8L compression (high fidelity, compact file size)
+                          </span>
                         </div>
                       )}
 
@@ -1228,9 +1240,9 @@ function App() {
                         </select>
                       </div>
 
-                      {(format === "jpg" || format === "webp") && (
+                      {format === "jpg" && (
                         <div className="form-field">
-                          <label>Quality: {quality}%</label>
+                          <label>JPEG Quality: {quality}%</label>
                           <input
                             type="range"
                             min="10"
@@ -1238,6 +1250,14 @@ function App() {
                             value={quality}
                             onChange={(e) => setQuality(parseInt(e.target.value, 10))}
                           />
+                        </div>
+                      )}
+
+                      {format === "webp" && (
+                        <div className="form-field" style={{ justifyContent: "center" }}>
+                          <span className="field-hint" style={{ color: "#8aa0bd" }}>
+                            WebP: Pure Rust lossless VP8L compression
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1338,10 +1358,21 @@ function App() {
                     {busy && (
                       <button
                         className="primary-action"
-                        style={{ width: 140, background: "rgba(220, 60, 60, .2)", color: "#ff9090", borderColor: "#ff6060" }}
-                        onClick={() => setBatchCancelled(true)}
+                        disabled={batchCancelled}
+                        style={{
+                          width: 140,
+                          background: "rgba(220, 60, 60, .2)",
+                          color: "#ff9090",
+                          borderColor: "#ff6060",
+                          opacity: batchCancelled ? 0.6 : 1,
+                        }}
+                        onClick={() => {
+                          cancelBatchRef.current = true;
+                          setBatchCancelled(true);
+                          setToast("Stopping batch queue after active file...");
+                        }}
                       >
-                        Stop Batch
+                        {batchCancelled ? "Stopping..." : "Stop Batch"}
                       </button>
                     )}
                   </div>
