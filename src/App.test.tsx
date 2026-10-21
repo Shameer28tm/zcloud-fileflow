@@ -1,37 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import App from "./App";
+import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
+
+const defaultInvokeImpl = (cmd: string) => {
+  if (cmd === "check_file_exists") return Promise.resolve(true);
+  if (cmd === "get_image_metadata") {
+    return Promise.resolve({
+      path: "C:\\mock\\photo.png",
+      filename: "photo.png",
+      format: "PNG",
+      width: 1920,
+      height: 1080,
+      file_size_bytes: 204800,
+      has_alpha: true,
+    });
+  }
+  if (cmd === "process_image") {
+    return Promise.resolve({
+      input_path: "C:\\mock\\photo.png",
+      output_path: "C:\\mock\\photo.webp",
+      original_size_bytes: 204800,
+      output_size_bytes: 102400,
+      original_width: 1920,
+      original_height: 1080,
+      output_width: 1920,
+      output_height: 1080,
+      output_format: "WEBP",
+      duration_ms: 45,
+    });
+  }
+  return Promise.resolve({});
+};
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn().mockImplementation((cmd: string) => {
-    if (cmd === "check_file_exists") return Promise.resolve(true);
-    if (cmd === "get_image_metadata") {
-      return Promise.resolve({
-        path: "C:\\mock\\photo.png",
-        filename: "photo.png",
-        format: "PNG",
-        width: 1920,
-        height: 1080,
-        file_size_bytes: 204800,
-        has_alpha: true,
-      });
-    }
-    if (cmd === "process_image") {
-      return Promise.resolve({
-        input_path: "C:\\mock\\photo.png",
-        output_path: "C:\\mock\\photo.webp",
-        original_size_bytes: 204800,
-        output_size_bytes: 102400,
-        original_width: 1920,
-        original_height: 1080,
-        output_width: 1920,
-        output_height: 1080,
-        output_format: "WEBP",
-        duration_ms: 45,
-      });
-    }
-    return Promise.resolve({});
-  }),
+  invoke: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -43,6 +47,7 @@ describe("Zcloud FileFlow Phase 1 - Frontend Test Suite", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    vi.mocked(invoke).mockImplementation(defaultInvokeImpl);
   });
 
   it("renders workspace branding and offline readiness badge", () => {
@@ -214,5 +219,153 @@ describe("Zcloud FileFlow Phase 1 - Frontend Test Suite", () => {
 
     expect(screen.getByText(/Batch Conversion Queue/i)).toBeDefined();
     expect(screen.getByText(/No images in batch queue/i)).toBeDefined();
+  });
+
+  it("converts selected image and appends missing extension, resetting loading state", async () => {
+    vi.mocked(open).mockResolvedValueOnce("C:\\mock\\picture.png");
+    vi.mocked(save).mockResolvedValueOnce("C:\\mock\\picture_out"); // Notice: no extension provided by dialog!
+
+    render(<App />);
+    const chooseBtn = screen.getByRole("button", { name: /Choose source image/i });
+    await act(async () => {
+      fireEvent.click(chooseBtn);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("picture.png").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const convertBtn = screen.getByRole("button", { name: /Convert image/i });
+    expect((convertBtn as HTMLButtonElement).disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(convertBtn);
+    });
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "process_image",
+        expect.objectContaining({
+          options: expect.objectContaining({
+            input_path: "C:\\mock\\picture.png",
+            output_path: "C:\\mock\\picture_out.webp", // Canonical extension appended!
+            output_format: "webp",
+          }),
+        }),
+      );
+      expect(screen.getByText(/Saved to photo\.webp/i)).toBeDefined();
+    });
+
+    // Busy state terminates and button is restored
+    expect((screen.getByRole("button", { name: /Convert image/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("surfaces backend conversion errors and resets busy state cleanly", async () => {
+    vi.mocked(open).mockResolvedValueOnce("C:\\mock\\broken.png");
+    vi.mocked(save).mockResolvedValueOnce("C:\\mock\\broken.webp");
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "process_image") {
+        return Promise.reject("Corrupt file header: decode error");
+      }
+      return defaultInvokeImpl(cmd);
+    });
+
+    render(<App />);
+    const chooseBtn = screen.getByRole("button", { name: /Choose source image/i });
+    await act(async () => {
+      fireEvent.click(chooseBtn);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("broken.png").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const convertBtn = screen.getByRole("button", { name: /Convert image/i });
+    await act(async () => {
+      fireEvent.click(convertBtn);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Corrupt file header: decode error")).toBeDefined();
+    });
+
+    // Busy state terminates on error
+    expect((screen.getByRole("button", { name: /Convert image/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("allows converting images with .jpeg extension", async () => {
+    vi.mocked(open).mockResolvedValueOnce("C:\\mock\\photo.jpeg");
+
+    render(<App />);
+    const chooseBtn = screen.getByRole("button", { name: /Choose source image/i });
+    await act(async () => {
+      fireEvent.click(chooseBtn);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("photo.jpeg").length).toBeGreaterThanOrEqual(1);
+    });
+
+    const convertBtn = screen.getByRole("button", { name: /Convert image/i });
+    expect((convertBtn as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("reports individual batch failures without crashing the batch queue", async () => {
+    vi.mocked(open)
+      .mockResolvedValueOnce(["C:\\mock\\first.png", "C:\\mock\\second.png"]) // chooseBatchFiles
+      .mockResolvedValueOnce("C:\\mock\\output"); // chooseBatchOutputDir
+
+    let processCallCount = 0;
+    vi.mocked(invoke).mockImplementation((cmd) => {
+      if (cmd === "process_image") {
+        processCallCount++;
+        if (processCallCount === 1) {
+          return Promise.reject("Decode failure on first image");
+        }
+        return Promise.resolve({
+          input_path: "C:\\mock\\second.png",
+          output_path: "C:\\mock\\output\\second_converted.webp",
+          original_size_bytes: 200000,
+          output_size_bytes: 100000,
+          original_width: 800,
+          original_height: 600,
+          output_width: 800,
+          output_height: 600,
+          output_format: "WEBP",
+          duration_ms: 30,
+        });
+      }
+      return defaultInvokeImpl(cmd);
+    });
+
+    render(<App />);
+    const imageNavBtn = screen.getAllByRole("button", { name: /Image tools/i })[0];
+    fireEvent.click(imageNavBtn);
+
+    const batchTab = screen.getByText(/Batch Processing/i);
+    fireEvent.click(batchTab);
+
+    const addFilesBtn = screen.getByRole("button", { name: /Add Images/i });
+    fireEvent.click(addFilesBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("first.png")).toBeDefined();
+      expect(screen.getByText("second.png")).toBeDefined();
+    });
+
+    const setFolderBtn = screen.getByRole("button", { name: /Browse\.\.\./i });
+    fireEvent.click(setFolderBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Output folder set to C:\\mock\\output/i)).toBeDefined();
+    });
+
+    const startBatchBtn = screen.getByRole("button", { name: /Process 2 Images/i });
+    fireEvent.click(startBatchBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Batch complete: 1 successful, 1 failed\./i)).toBeDefined();
+      expect(screen.getByText("Decode failure on first image")).toBeDefined();
+    });
   });
 });

@@ -8,6 +8,11 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "allow-convert-image",
+    "allow-process-image",
+    "allow-batch-process-images",
+    "allow-get-image-metadata",
+    "allow-check-file-exists"
   ]
 }

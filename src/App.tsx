@@ -82,7 +82,7 @@ export type ProcessResult = {
 };
 
 const HISTORY_KEY = "zcloud-fileflow.recent.v1";
-const supportedFormats = ["png", "jpg", "webp", "bmp"];
+const supportedFormats = ["png", "jpg", "jpeg", "webp", "bmp"];
 
 export function getFileName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
@@ -188,7 +188,8 @@ function App() {
           setResizeHeight(meta.height.toString());
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn("Could not read image metadata:", err);
         setSelectedMeta(null);
       });
   }, [selectedPath]);
@@ -349,19 +350,30 @@ function App() {
     const originalName = getFileName(selectedPath);
     const dot = originalName.lastIndexOf(".");
     const stem = dot > 0 ? originalName.slice(0, dot) : originalName;
+    const targetExt = format.toLowerCase() === "jpeg" ? "jpg" : format.toLowerCase();
 
     try {
       const destination = await save({
-        defaultPath: stem + "." + format,
-        filters: [{ name: currentFormatLabel + " image", extensions: [format] }],
+        defaultPath: `${stem}.${targetExt}`,
+        filters: [{ name: `${currentFormatLabel} image`, extensions: [targetExt] }],
       });
       if (!destination) return;
+
+      let targetPath = destination;
+      const currentExt = getExtension(destination).toLowerCase();
+      if (currentExt !== targetExt && currentExt !== (targetExt === "jpg" ? "jpeg" : targetExt)) {
+        if (!currentExt) {
+          targetPath = `${destination}.${targetExt}`;
+        } else {
+          targetPath = `${destination.slice(0, destination.lastIndexOf("."))}.${targetExt}`;
+        }
+      }
 
       setBusy(true);
 
       const processOptions = {
         input_path: selectedPath,
-        output_path: destination,
+        output_path: targetPath,
         output_format: format,
         resize: resizeEnabled
           ? {
@@ -395,7 +407,16 @@ function App() {
         sizeBytes: result.output_size_bytes,
       });
     } catch (error) {
-      setToast(typeof error === "string" ? error : "Processing failed. Check input image and destination.");
+      console.error("Image conversion failed:", error);
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : typeof (error as any)?.message === "string"
+              ? (error as any).message
+              : "Processing failed. Check input image and destination.";
+      setToast(message);
     } finally {
       setBusy(false);
     }
@@ -439,7 +460,8 @@ function App() {
       const dot = item.name.lastIndexOf(".");
       const stem = dot > 0 ? item.name.slice(0, dot) : item.name;
       const separator = batchOutputDir.includes("/") ? "/" : "\\";
-      const outPath = `${batchOutputDir}${separator}${stem}_converted.${format}`;
+      const targetExt = format.toLowerCase() === "jpeg" ? "jpg" : format.toLowerCase();
+      const outPath = `${batchOutputDir}${separator}${stem}_converted.${targetExt}`;
 
       try {
         const processOptions = {
@@ -472,7 +494,14 @@ function App() {
         );
       } catch (err) {
         failCount++;
-        const msg = typeof err === "string" ? err : "Failed to process";
+        const msg =
+          typeof err === "string"
+            ? err
+            : err instanceof Error
+              ? err.message
+              : typeof (err as any)?.message === "string"
+                ? (err as any).message
+                : "Failed to process";
         setBatchQueue((prev) =>
           prev.map((q, idx) =>
             idx === i ? { ...q, status: "failed", errorMessage: msg } : q,

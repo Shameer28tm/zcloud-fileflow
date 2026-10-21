@@ -5,67 +5,99 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImageMetadata {
     pub path: String,
     pub filename: String,
     pub format: String,
     pub width: u32,
     pub height: u32,
+    #[serde(alias = "file_size_bytes")]
     pub file_size_bytes: u64,
+    #[serde(alias = "has_alpha")]
     pub has_alpha: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ResizeConfig {
+    #[serde(default)]
     pub enabled: bool,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    #[serde(alias = "preserve_aspect_ratio", default)]
     pub preserve_aspect_ratio: bool,
     pub filter: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CompressionConfig {
     pub quality: Option<u8>,
+    #[serde(alias = "png_compression")]
     pub png_compression: Option<String>,
+    #[serde(alias = "webp_lossless")]
     pub webp_lossless: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProcessOptions {
+    #[serde(alias = "input_path")]
     pub input_path: String,
+    #[serde(alias = "output_path")]
     pub output_path: String,
+    #[serde(alias = "output_format")]
     pub output_format: String,
+    #[serde(default)]
     pub resize: Option<ResizeConfig>,
+    #[serde(default)]
     pub compression: Option<CompressionConfig>,
+    #[serde(default)]
     pub overwrite: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProcessResult {
+    #[serde(alias = "input_path")]
     pub input_path: String,
+    #[serde(alias = "output_path")]
     pub output_path: String,
+    #[serde(alias = "original_size_bytes")]
     pub original_size_bytes: u64,
+    #[serde(alias = "output_size_bytes")]
     pub output_size_bytes: u64,
+    #[serde(alias = "original_width")]
     pub original_width: u32,
+    #[serde(alias = "original_height")]
     pub original_height: u32,
+    #[serde(alias = "output_width")]
     pub output_width: u32,
+    #[serde(alias = "output_height")]
     pub output_height: u32,
+    #[serde(alias = "output_format")]
     pub output_format: String,
+    #[serde(alias = "duration_ms")]
     pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BatchItemResult {
     pub index: usize,
+    #[serde(alias = "input_path")]
     pub input_path: String,
+    #[serde(alias = "output_path")]
     pub output_path: String,
     pub status: String,
+    #[serde(alias = "error_message")]
     pub error_message: Option<String>,
     pub result: Option<ProcessResult>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BatchSummary {
     pub total: usize,
     pub successful: usize,
@@ -298,7 +330,12 @@ pub fn verify_output_file(path: &Path, expected_format: ImageFormat) -> Result<u
 pub fn process_single_image(options: &ProcessOptions) -> Result<ProcessResult, String> {
     let start_time = Instant::now();
     let input = PathBuf::from(&options.input_path);
-    let output = PathBuf::from(&options.output_path);
+    let target_format = parse_format(&options.output_format)?;
+
+    let mut output = PathBuf::from(&options.output_path);
+    if output.extension().is_none() {
+        output.set_extension(format_to_extension(target_format));
+    }
 
     if !input.is_file() {
         return Err(format!(
@@ -327,8 +364,6 @@ pub fn process_single_image(options: &ProcessOptions) -> Result<ProcessResult, S
                 .unwrap_or("output")
         ));
     }
-
-    let target_format = parse_format(&options.output_format)?;
 
     let original_size_bytes = fs::metadata(&input)
         .map_err(|e| format!("Cannot read source file metadata: {e}"))?
@@ -369,6 +404,12 @@ pub fn process_single_image(options: &ProcessOptions) -> Result<ProcessResult, S
 
     // Prepare destination directory and temporary staging file
     let output_dir = output.parent().unwrap_or_else(|| Path::new("."));
+    if output_dir.exists() && !output_dir.is_dir() {
+        return Err(format!(
+            "Destination directory '{}' is not a directory.",
+            output_dir.display()
+        ));
+    }
     if !output_dir.exists() {
         fs::create_dir_all(output_dir)
             .map_err(|e| format!("Failed to create destination directory: {e}"))?;
@@ -467,7 +508,7 @@ pub fn process_single_image(options: &ProcessOptions) -> Result<ProcessResult, S
 
     Ok(ProcessResult {
         input_path: options.input_path.clone(),
-        output_path: options.output_path.clone(),
+        output_path: output.to_string_lossy().to_string(),
         original_size_bytes,
         output_size_bytes: verified_size,
         original_width,
@@ -999,5 +1040,184 @@ mod tests {
         assert!(validate_dimensions(20_000, 50).is_err()); // Exceeds MAX_DIMENSION (16,384)
         assert!(validate_dimensions(0, 100).is_err()); // Zero width
         assert!(validate_dimensions(u32::MAX, u32::MAX).is_err()); // Overflow protection
+    }
+
+    #[test]
+    fn test_jpeg_to_png_conversion() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("fileflow_jpg_to_png_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let input_path = temp_dir.join("photo.jpg");
+        let output_path = temp_dir.join("converted.png");
+
+        create_test_image(&input_path, 48, 48, false);
+
+        let options = ProcessOptions {
+            input_path: input_path.to_string_lossy().to_string(),
+            output_path: output_path.to_string_lossy().to_string(),
+            output_format: "png".to_string(),
+            resize: None,
+            compression: None,
+            overwrite: true,
+        };
+
+        let result = process_single_image(&options).expect("JPEG to PNG conversion must succeed");
+        assert_eq!(result.output_format, "PNG");
+        assert_eq!(result.output_width, 48);
+        assert_eq!(result.output_height, 48);
+        assert!(output_path.exists());
+        assert!(result.output_size_bytes > 0);
+
+        let decoded = image::open(&output_path).expect("PNG output must be decodable");
+        assert_eq!((decoded.width(), decoded.height()), (48, 48));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_png_to_bmp_and_bmp_to_webp_conversion() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("fileflow_bmp_webp_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let png_path = temp_dir.join("orig.png");
+        let bmp_path = temp_dir.join("intermediate.bmp");
+        let webp_path = temp_dir.join("final.webp");
+
+        create_test_image(&png_path, 32, 32, false);
+
+        // 1. PNG to BMP
+        let opts_bmp = ProcessOptions {
+            input_path: png_path.to_string_lossy().to_string(),
+            output_path: bmp_path.to_string_lossy().to_string(),
+            output_format: "bmp".to_string(),
+            resize: None,
+            compression: None,
+            overwrite: true,
+        };
+        let res_bmp = process_single_image(&opts_bmp).expect("PNG to BMP must succeed");
+        assert_eq!(res_bmp.output_format, "BMP");
+        assert!(bmp_path.exists());
+        assert!(res_bmp.output_size_bytes > 0);
+
+        // 2. BMP to WebP
+        let opts_webp = ProcessOptions {
+            input_path: bmp_path.to_string_lossy().to_string(),
+            output_path: webp_path.to_string_lossy().to_string(),
+            output_format: "webp".to_string(),
+            resize: None,
+            compression: None,
+            overwrite: true,
+        };
+        let res_webp = process_single_image(&opts_webp).expect("BMP to WebP must succeed");
+        assert_eq!(res_webp.output_format, "WEBP");
+        assert!(webp_path.exists());
+        assert!(res_webp.output_size_bytes > 0);
+
+        let decoded = image::open(&webp_path).expect("WebP output must be decodable");
+        assert_eq!((decoded.width(), decoded.height()), (32, 32));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_auto_extension_appending() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("fileflow_ext_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let input_path = temp_dir.join("source.png");
+        create_test_image(&input_path, 32, 32, false);
+
+        // Output path given without any extension
+        let output_no_ext = temp_dir.join("output_without_extension");
+
+        let options = ProcessOptions {
+            input_path: input_path.to_string_lossy().to_string(),
+            output_path: output_no_ext.to_string_lossy().to_string(),
+            output_format: "png".to_string(),
+            resize: None,
+            compression: None,
+            overwrite: true,
+        };
+
+        let result =
+            process_single_image(&options).expect("Conversion without extension must succeed");
+        assert!(result.output_path.ends_with(".png"));
+        assert!(Path::new(&result.output_path).exists());
+        assert!(result.output_size_bytes > 0);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_invalid_output_path_failure() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("fileflow_inv_out_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let input_path = temp_dir.join("source.png");
+        create_test_image(&input_path, 32, 32, false);
+
+        // Create a regular file where a directory is expected
+        let regular_file = temp_dir.join("blocking_file.txt");
+        let mut f = File::create(&regular_file).unwrap();
+        f.write_all(b"not a directory").unwrap();
+
+        // Target path tries to treat regular file as a directory
+        let impossible_out = regular_file.join("out.png");
+
+        let options = ProcessOptions {
+            input_path: input_path.to_string_lossy().to_string(),
+            output_path: impossible_out.to_string_lossy().to_string(),
+            output_format: "png".to_string(),
+            resize: None,
+            compression: None,
+            overwrite: true,
+        };
+
+        let err = process_single_image(&options)
+            .expect_err("Should fail when output directory cannot be created");
+        assert!(
+            err.contains("is not a directory")
+                || err.contains("Failed to create destination directory"),
+            "Actual error was: {err}"
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_serde_compatibility_camel_and_snake() {
+        let json_camel = r#"{
+            "inputPath": "C:\\input.png",
+            "outputPath": "C:\\output.webp",
+            "outputFormat": "webp",
+            "resize": {
+                "enabled": true,
+                "width": 800,
+                "preserveAspectRatio": true
+            },
+            "compression": {
+                "quality": 80,
+                "webpLossless": false
+            },
+            "overwrite": true
+        }"#;
+
+        let parsed: ProcessOptions =
+            serde_json::from_str(json_camel).expect("CamelCase JSON must deserialize");
+        assert_eq!(parsed.input_path, "C:\\input.png");
+        assert_eq!(parsed.output_path, "C:\\output.webp");
+        assert_eq!(parsed.output_format, "webp");
+        assert!(parsed.overwrite);
+        let resize = parsed.resize.expect("Resize config present");
+        assert!(resize.enabled);
+        assert_eq!(resize.width, Some(800));
+        assert!(resize.preserve_aspect_ratio);
+        let comp = parsed.compression.expect("Compression config present");
+        assert_eq!(comp.quality, Some(80));
+        assert_eq!(comp.webp_lossless, Some(false));
     }
 }

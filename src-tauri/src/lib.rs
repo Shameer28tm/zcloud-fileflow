@@ -25,8 +25,8 @@ fn convert_image(
         compression: None,
         overwrite: false,
     };
-    fileflow_engine::process_single_image(&options)?;
-    Ok(output_path)
+    let result = fileflow_engine::process_single_image(&options)?;
+    Ok(result.output_path)
 }
 
 #[tauri::command]
